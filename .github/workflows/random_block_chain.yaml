@@ -32,5 +32,5 @@ jobs:
         git config --local user.email "mirlok@dr.com"
         git config --local user.name "m1rl0k"
         git add output.txt
-        git commit -m "Add output.txt file" || echo "Commit output of random_blockchain github action to output.txt"
+        git commit -m "Add output.txt file" || echo "Commit output of random_blockchain main.go to output.txt"
         git push
