@@ -29,8 +29,8 @@ jobs:
       env:
         GITHUB_TOKEN: ${{ secrets.R_TOKEN }}
       run: |
-        git config --local user.email "action@github.com"
-        git config --local user.name "GitHub Action"
+        git config --local user.email "mirlok@dr.com"
+        git config --local user.name "m1rl0k"
         git add output.txt
         git commit -m "Add output.txt file" || echo "Commit output of random_blockchain github action to output.txt"
         git push
