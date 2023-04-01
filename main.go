@@ -129,16 +129,22 @@ type Node struct {
 }
 
 func NewNode(id string, neighbors []string) *Node {
-	node := &Node{
-		ID:         id,
-		Blockchain: NewBlockchain(),
-		Neighbors:  neighbors,
-	}
+    node := &Node{
+        ID:         id,
+        Blockchain: NewBlockchain(),
+        Neighbors:  neighbors,
+    }
 
-	go node.Listen()
+    err := node.StartServer()
+    if err != nil {
+        fmt.Println("Error starting server:", err)
+        return nil
+    }
+    go node.Listen()
 
-	return node
+    return node
 }
+
 
 func (n *Node) Broadcast(msg string) {
 	for _, neighbor := range n.Neighbors {
