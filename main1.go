@@ -244,5 +244,18 @@ func main() {
 
 	// add some blocks
 	node1.Blockchain.AddBlock("Block from node1")
-	node2.Block
+		node2.Blockchain.AddBlock("Block from node2")
+	node3.Blockchain.AddBlock("Block from node3")
+
+	time.Sleep(5 * time.Second)
+
+	// print blockchain on all nodes
+	fmt.Println("Blockchain on node 1:")
+	node1.Blockchain.Print()
+	fmt.Println("Blockchain on node 2:")
+	node2.Blockchain.Print()
+	fmt.Println("Blockchain on node 3:")
+	node3.Blockchain.Print()
+}
+
 
