@@ -62,6 +62,38 @@ type Blockchain struct {
 	mu     sync.Mutex
 }
 
+func (bc *Blockchain) IsValid() bool {
+    for i := 1; i < len(bc.Blocks); i++ {
+        currentBlock := bc.Blocks[i]
+        prevBlock := bc.Blocks[i-1]
+
+        if currentBlock.Hash != currentBlock.CalculateHash() {
+            return false
+        }
+
+        if currentBlock.PrevHash != prevBlock.Hash {
+            return false
+        }
+    }
+    return true
+}
+
+func (bc *Blockchain) AddBlockToChain(newBlock *Block) bool {
+    bc.mu.Lock()
+    defer bc.mu.Unlock()
+
+    if newBlock.PrevHash != bc.LatestBlock().Hash {
+        return false
+    }
+
+    if !strings.HasPrefix(newBlock.Hash, strings.Repeat("0", Difficulty)) {
+        return false
+    }
+
+    bc.Blocks = append(bc.Blocks, newBlock)
+    return true
+}
+
 func NewBlockchain() *Blockchain {
 	blockchain := &Blockchain{
 		Blocks: []*Block{NewBlock(0, "Genesis Block", "")},
