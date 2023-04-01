@@ -26,6 +26,8 @@ jobs:
         go run main.go > output.txt
 
     - name: Commit and push output file
+      env:
+        GITHUB_TOKEN: ${{ secrets.R_TOKEN }}
       run: |
         git config --local user.email "action@github.com"
         git config --local user.name "GitHub Action"
