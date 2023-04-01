@@ -157,50 +157,51 @@ func (n *Node) SendToNeighbor(neighbor string, msg string) {
 }
 
 func (n *Node) Listen() {
-	var wg sync.WaitGroup
-	wg.Add(1)
+    var wg sync.WaitGroup
+    wg.Add(1)
 
-	go func() {
-		defer wg.Done()
+    go func() {
+        defer wg.Done()
 
-		for {
-			conn, err := n.server.Accept()
-			if err != nil {
-				return
-			}
+        for {
+            conn, err := n.server.Accept()
+            if err != nil {
+                return
+            }
 
-			go func(conn net.Conn) {
-				defer conn.Close()
+            go func(conn net.Conn) {
+                defer conn.Close()
 
-				buf := make([]byte, 4096)
-				n, err := conn.Read(buf)
-				if err != nil {
-					return
-				}
+                buf := make([]byte, 4096)
+                numBytes, err := conn.Read(buf)
+                if err != nil {
+                    return
+                }
 
-				msg := string(buf[:n])
-				if strings.HasPrefix(msg, "BLOCK") {
-					blockStr := strings.Split(msg, " ")[1]
-					var block Block
-					if err := json.Unmarshal([]byte(blockStr), &block); err != nil {
-						fmt.Println(err)
-						return
-					}
-					if !n.Blockchain.AddBlockToChain(&block) {
-						fmt.Println("Failed to add block to chain!")
-						return
-					}
-					fmt.Printf("Node %s added block with index %d and hash %s\n", n.ID, block.Index, block.Hash)
-					n.Broadcast(msg)
-				} else if strings.HasPrefix(msg, "REQUEST") {
-					n.sendChainToNeighbor(conn)
-				}
-			}(conn)
-		}
-	}()
+                msg := string(buf[:numBytes])
+                if strings.HasPrefix(msg, "BLOCK") {
+                    blockStr := strings.Split(msg, " ")[1]
+                    var block Block
+                    if err := json.Unmarshal([]byte(blockStr), &block); err != nil {
+                        fmt.Println(err)
+                        return
+                    }
+                    if !n.Blockchain.AddBlockToChain(&block) {
+                        fmt.Println("Failed to add block to chain!")
+                        return
+                    }
+                    fmt.Printf("Node %s added block with index %d and hash %s\n", n.ID, block.Index, block.Hash)
+                    n.Broadcast(msg)
+                } else if strings.HasPrefix(msg, "REQUEST") {
+                    n.sendChainToNeighbor(conn)
+                }
+            }(conn)
+        }
+    }()
 
-	wg.Wait()
+    wg.Wait()
 }
+
 
 func (n *Node) sendChainToNeighbor(conn net.Conn) {
 	n.Blockchain.mu.Lock()
