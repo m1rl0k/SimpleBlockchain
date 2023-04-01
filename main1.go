@@ -116,4 +116,133 @@ func (n *Node) Broadcast(msg string) {
 
 func (n *Node) SendToNeighbor(neighbor string, msg string) {
 	conn, err := net.Dial("tcp", neighbor)
-	if err !=
+		if err != nil {
+		return
+	}
+	defer conn.Close()
+
+	conn.Write([]byte(msg))
+}
+
+func (n *Node) Listen() {
+	var wg sync.WaitGroup
+	wg.Add(1)
+
+	go func() {
+		defer wg.Done()
+
+		for {
+			conn, err := n.server.Accept()
+			if err != nil {
+				return
+			}
+
+			go func(conn net.Conn) {
+				defer conn.Close()
+
+				buf := make([]byte, 4096)
+				n, err := conn.Read(buf)
+				if err != nil {
+					return
+				}
+
+				msg := string(buf[:n])
+				if strings.HasPrefix(msg, "BLOCK") {
+					blockStr := strings.Split(msg, " ")[1]
+					var block Block
+					if err := json.Unmarshal([]byte(blockStr), &block); err != nil {
+						fmt.Println(err)
+						return
+					}
+					if !n.Blockchain.AddBlockToChain(&block) {
+						fmt.Println("Failed to add block to chain!")
+						return
+					}
+					fmt.Printf("Node %s added block with index %d and hash %s\n", n.ID, block.Index, block.Hash)
+					n.Broadcast(msg)
+				} else if strings.HasPrefix(msg, "REQUEST") {
+					n.sendChainToNeighbor(conn)
+				}
+			}(conn)
+		}
+	}()
+
+	wg.Wait()
+}
+
+func (n *Node) sendChainToNeighbor(conn net.Conn) {
+	n.Blockchain.mu.Lock()
+	defer n.Blockchain.mu.Unlock()
+
+	for _, block := range n.Blockchain.Blocks {
+		blockBytes, err := json.Marshal(block)
+		if err != nil {
+			return
+		}
+		conn.Write(blockBytes)
+	}
+}
+
+func (n *Node) StartServer() error {
+	l, err := net.Listen("tcp", ":"+n.ID)
+	if err != nil {
+		return err
+	}
+	n.server = l
+	return nil
+}
+
+func (n *Node) JoinNetwork() {
+	for _, neighbor := range n.Neighbors {
+		conn, err := net.Dial("tcp", neighbor)
+		if err != nil {
+			continue
+		}
+
+		// Request blockchain from neighbor
+		conn.Write([]byte("REQUEST"))
+
+		// Receive blockchain from neighbor
+		buf := make([]byte, 4096)
+		var blocks []*Block
+		for {
+			n, err := conn.Read(buf)
+			if err != nil {
+				break
+			}
+			var block Block
+			if err := json.Unmarshal(buf[:n], &block); err != nil {
+				fmt.Println(err)
+				break
+			}
+			blocks = append(blocks, &block)
+		}
+		conn.Close()
+
+		// Rebuild blockchain
+		newChain := &Blockchain{Blocks: blocks}
+		if len(newChain.Blocks) > len(n.Blockchain.Blocks) && newChain.IsValid() {
+			n.Blockchain = newChain
+		}
+	}
+}
+
+func main() {
+	// create nodes
+	node1 := NewNode("3000", []string{"localhost:3001", "localhost:3002"})
+	node2 := NewNode("3001", []string{"localhost:3000", "localhost:3002"})
+	node3 := NewNode("3002", []string{"localhost:3000", "localhost:3001"})
+
+	// start servers and join network
+	node1.StartServer()
+	node2.StartServer()
+	node3.StartServer()
+
+	node1.JoinNetwork()
+	node2.JoinNetwork()
+	node3.JoinNetwork()
+
+	// add some blocks
+	node1.Blockchain.AddBlock("Block from node1")
+	node2.Block
+
