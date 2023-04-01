@@ -142,3 +142,122 @@ func (n *Node) Listen() {
 
 				msg := string(buf[:n])
 				if strings.HasPrefix(msg,
+if strings.HasPrefix(msg, "BLOCK") {
+					blockStr := strings.Split(msg, " ")[1]
+					var block Block
+					if err := block.Unmarshal
+(buf[:n]); err != nil {
+fmt.Println(err)
+return
+}
+if !n.Blockchain.AddBlockToChain(&block) {
+fmt.Println("Failed to add block to chain!")
+return
+}
+fmt.Printf("Node %s added block with index %d and hash %s\n", n.ID, block.Index, block.Hash)
+n.Broadcast(msg)
+} else if strings.HasPrefix(msg, "REQUEST") {
+n.sendChainToNeighbor(conn)
+}
+}(conn)
+}
+}()
+
+scss
+Copy code
+wg.Wait()
+}
+
+func (n *Node) sendChainToNeighbor(conn net.Conn) {
+n.Blockchain.mu.Lock()
+defer n.Blockchain.mu.Unlock()
+
+go
+Copy code
+for _, block := range n.Blockchain.Blocks {
+	blockBytes, err := block.Marshal()
+	if err != nil {
+		return
+	}
+	conn.Write(blockBytes)
+}
+}
+
+func (n *Node) StartServer() error {
+l, err := net.Listen("tcp", ":"+n.ID)
+if err != nil {
+return err
+}
+n.server = l
+return nil
+}
+
+func (n *Node) JoinNetwork() {
+for _, neighbor := range n.Neighbors {
+conn, err := net.Dial("tcp", neighbor)
+if err != nil {
+continue
+}
+
+go
+Copy code
+	// Request blockchain from neighbor
+	conn.Write([]byte("REQUEST"))
+
+	// Receive blockchain from neighbor
+	buf := make([]byte, 4096)
+	var blocks []*Block
+	for {
+		n, err := conn.Read(buf)
+		if err != nil {
+			break
+		}
+		var block Block
+		if err := block.Unmarshal(buf[:n]); err != nil {
+			fmt.Println(err)
+			break
+		}
+		blocks = append(blocks, &block)
+	}
+	conn.Close()
+
+	// Rebuild blockchain
+	newChain := &Blockchain{Blocks: blocks}
+	if len(newChain.Blocks) > len(n.Blockchain.Blocks) && newChain.IsValid() {
+		n.Blockchain = newChain
+	}
+}
+}
+
+func main() {
+// create nodes
+node1 := NewNode("3000", []string{"localhost:3001", "localhost:3002"})
+node2 := NewNode("3001", []string{"localhost:3000", "localhost:3002"})
+node3 := NewNode("3002", []string{"localhost:3000", "localhost:3001"})
+
+scss
+Copy code
+// start servers and join network
+node1.StartServer()
+node2.StartServer()
+node3.StartServer()
+
+node1.JoinNetwork()
+node2.JoinNetwork()
+node3.JoinNetwork()
+
+// add some blocks
+node1.Blockchain.AddBlock("Block from node1")
+node2.Blockchain.AddBlock("Block from node2")
+node3.Blockchain.AddBlock("Block from node3")
+
+time.Sleep(5 * time.Second)
+
+// print blockchain on all nodes
+fmt.Println("Blockchain on node 1:")
+node1.Blockchain.Print()
+fmt.Println("Blockchain on node 2:")
+node2.Blockchain.Print()
+fmt.Println("Blockchain on node 3:")
+node3.Blockchain.Print()
+}
