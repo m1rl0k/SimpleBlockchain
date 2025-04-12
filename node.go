@@ -180,13 +180,15 @@ func (n *Node) handleNewTransactionMessage(message P2PMessage) {
 		n.mu.Unlock()
 		return
 	}
+	// Mark as known immediately to prevent race conditions
 	n.knownTxs[tx.ID] = true
 	n.mu.Unlock()
 
 	fmt.Printf("Node %s received new transaction: %s -> %s: %.2f\n", 
 		n.ID, tx.Sender, tx.Recipient, tx.Amount)
 	
-	// Add to pending transactions
+	// Add to pending transactions - if it fails, we still keep it as "known"
+	// to avoid reprocessing duplicates
 	if n.Blockchain.AddTransaction(&tx) {
 		fmt.Printf("Node %s added transaction to pending pool\n", n.ID)
 		
@@ -461,7 +463,7 @@ func (n *Node) broadcast(message P2PMessage) {
 	}
 }
 
-// sendToNeighbor sends a message to a neighbor
+// sendToNeighbor sends a message to a neighbor with retry logic
 func (n *Node) sendToNeighbor(neighbor string, message P2PMessage) {
 	// Serialize message
 	messageJSON, err := json.Marshal(message)
@@ -470,13 +472,31 @@ func (n *Node) sendToNeighbor(neighbor string, message P2PMessage) {
 		return
 	}
 	
-	// Connect to neighbor with timeout
-	conn, err := net.DialTimeout("tcp", neighbor, 2*time.Second)
-	if err != nil {
-		// Not a critical error, neighbor might be offline
-		fmt.Printf("Could not connect to %s: %v\n", neighbor, err)
-		return
+	// Retry logic - attempt up to 3 times with exponential backoff
+	var conn net.Conn
+	maxRetries := 3
+	
+	for retry := 0; retry < maxRetries; retry++ {
+		// Connect to neighbor with timeout
+		conn, err = net.DialTimeout("tcp", neighbor, 2*time.Second)
+		if err == nil {
+			break // Successfully connected
+		}
+		
+		// If not the last retry, wait with exponential backoff before retrying
+		if retry < maxRetries-1 {
+			backoffTime := time.Duration(50*(1<<retry)) * time.Millisecond // 50ms, 100ms, 200ms
+			fmt.Printf("Connection attempt %d to %s failed: %v, retrying in %v...\n", 
+				retry+1, neighbor, err, backoffTime)
+			time.Sleep(backoffTime)
+		} else {
+			// Last retry failed
+			fmt.Printf("Could not connect to %s after %d attempts: %v\n", 
+				neighbor, maxRetries, err)
+			return
+		}
 	}
+	
 	defer conn.Close()
 	
 	// Set write deadline

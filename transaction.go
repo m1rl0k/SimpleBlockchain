@@ -31,15 +31,10 @@ func NewTransaction(sender, recipient string, amount float64, privateKey *rsa.Pr
 		Amount:    amount,
 	}
 
-	// Generate a unique ID
-	idBytes := make([]byte, 16)
-	_, err := rand.Read(idBytes)
-	if err == nil {
-		tx.ID = hex.EncodeToString(idBytes)
-	} else {
-		// Fallback if random generation fails
-		tx.ID = fmt.Sprintf("%s-%s-%d", sender, recipient, tx.Timestamp)
-	}
+	// Generate a unique ID that includes hash of transaction data
+	txData := sender + recipient + fmt.Sprintf("%f", amount) + fmt.Sprintf("%d", tx.Timestamp)
+	txHash := sha256.Sum256([]byte(txData))
+	tx.ID = hex.EncodeToString(txHash[:])
 
 	// Calculate hash
 	tx.Hash = tx.CalculateHash()

@@ -58,6 +58,14 @@ func (bc *Blockchain) AddTransaction(tx *Transaction) bool {
 	// Print transaction for debugging
 	fmt.Printf("Adding transaction: %s -> %s: %.2f\n", tx.Sender, tx.Recipient, tx.Amount)
 	
+	// Check for duplicate transaction IDs
+	for _, pendingTx := range bc.PendingTxs {
+		if pendingTx.ID == tx.ID {
+			fmt.Printf("Transaction with ID %s already in pending pool, ignoring\n", tx.ID)
+			return false
+		}
+	}
+	
 	// Validate transaction
 	if !bc.ValidateTransaction(tx) {
 		fmt.Printf("Transaction validation failed!\n")
@@ -187,59 +195,75 @@ func (bc *Blockchain) AddBlockToChain(newBlock *Block) bool {
 	
 	// Check if we already have this block hash to prevent duplicates
 	for _, block := range bc.Blocks {
-		// If hash matches, this is a duplicate block we've already seen
 		if block.Hash == newBlock.Hash {
 			fmt.Printf("Block with hash %s already exists in chain, ignoring\n", newBlock.Hash)
 			return false
 		}
-		
-		// If we already have a block with this index, verify it's not a duplicate
+	}
+	
+	// Find existing block at this index if any
+	var existingBlockAtIndex *Block
+	for _, block := range bc.Blocks {
 		if block.Index == newBlock.Index {
-			fmt.Printf("Block with index %d already exists, comparing transactions\n", newBlock.Index)
-			// For demo purposes, we'll assume it's a duplicate and reject it
+			existingBlockAtIndex = block
+			break
+		}
+	}
+	
+	// If there's an existing block at this index, we have a potential fork
+	if existingBlockAtIndex != nil {
+		fmt.Printf("Block with index %d already exists, handling potential fork\n", newBlock.Index)
+		
+		// In a production system, we'd implement proper fork resolution
+		// For now, we'll use a simple rule: keep the block with the lowest hash value
+		// (indicating more work was done to find it)
+		if newBlock.Hash < existingBlockAtIndex.Hash {
+			fmt.Printf("New block has lower hash value, replacing existing block\n")
+			
+			// Replace the block at this index
+			for i, block := range bc.Blocks {
+				if block.Index == newBlock.Index {
+					bc.Blocks[i] = newBlock
+					// Truncate the chain after this point to avoid inconsistencies
+					bc.Blocks = bc.Blocks[:i+1]
+					break
+				}
+			}
+			
+			return true
+		} else {
+			fmt.Printf("Existing block has lower hash value, keeping it\n")
 			return false
 		}
 	}
 	
 	latestBlock := bc.LatestBlock()
 	
-	// Basic validation checks
+	// Validate the block connects to our chain
 	if newBlock.Index != latestBlock.Index+1 {
 		fmt.Printf("Block index mismatch: expected %d, got %d\n", latestBlock.Index+1, newBlock.Index)
-		
-		// For shared blockchain demo, accept block anyway and fix its index
-		// In a real implementation, this would be rejected
-		fmt.Printf("Fixing block index to match expected value\n")
-		newBlock.Index = latestBlock.Index + 1
+		return false
 	}
 	
 	if newBlock.PrevHash != latestBlock.Hash {
 		fmt.Printf("Block previous hash mismatch: expected %s, got %s\n", latestBlock.Hash, newBlock.PrevHash)
-		
-		// For shared blockchain demo, update prevHash to match our chain
-		// In a real implementation, this would be rejected
-		fmt.Printf("Fixing block previous hash to match our chain\n")
-		newBlock.PrevHash = latestBlock.Hash
-		
-		// Recalculate the hash since we changed a field
-		newBlock.Hash = newBlock.CalculateHash()
+		return false
 	}
 	
 	// Verify the hash matches the calculated hash
 	calculatedHash := newBlock.CalculateHash()
 	if newBlock.Hash != calculatedHash {
-		fmt.Printf("Block hash is invalid, recalculating\n")
-		newBlock.Hash = calculatedHash
+		fmt.Printf("Block hash is invalid, expected %s, got %s\n", calculatedHash, newBlock.Hash)
+		return false
 	}
 	
 	// Verify transactions
 	fmt.Printf("Validating %d transactions in block\n", len(newBlock.Transactions))
 	for _, tx := range newBlock.Transactions {
 		if !bc.ValidateTransaction(tx) {
-			// For the demo, we'll just log failures but still accept the block
-			// In a real implementation, we would reject the entire block
-			fmt.Printf("Transaction validation failed: %s -> %s: %.2f (ACCEPTING ANYWAY FOR DEMO)\n", 
+			fmt.Printf("Transaction validation failed: %s -> %s: %.2f\n", 
 				tx.Sender, tx.Recipient, tx.Amount)
+			return false
 		} else {
 			fmt.Printf("Transaction valid: %s -> %s: %.2f\n", tx.Sender, tx.Recipient, tx.Amount)
 		}
